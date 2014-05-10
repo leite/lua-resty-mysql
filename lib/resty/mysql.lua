@@ -3,31 +3,102 @@
 
 local bit = require "bit"
 local sub = string.sub
-local tcp = ngx.socket.tcp
 local strbyte = string.byte
 local strchar = string.char
 local strfind = string.find
 local strrep = string.rep
-local null = ngx.null
 local band = bit.band
 local bxor = bit.bxor
 local bor = bit.bor
 local lshift = bit.lshift
 local rshift = bit.rshift
 local tohex = bit.tohex
-local sha1 = ngx.sha1_bin
 local concat = table.concat
 local unpack = unpack
 local setmetatable = setmetatable
 local error = error
 local tonumber = tonumber
 
+local tcp, null, sha1
 
 local ok, new_tab = pcall(require, "table.new")
 if not ok then
     new_tab = function (narr, nrec) return {} end
 end
 
+if not ngx then
+    local cjson, socket, ffi, C
+    -- try to load luasocket
+    ok, socket = pcall(require, "socket")
+    if not ok then error("fail to load luasocket") end
+    -- try to load unix socket wrapper
+    ok, socket.unix = pcall(require, "socket.unix")
+    if not ok then error("fail to load unix socket from luasocket") end
+    -- try to load cjson
+    ok, cjson = pcall(require, "cjson")
+    if not ok then error("fail to load cjson") end
+    -- try to load ffi
+    ok, ffi = pcall(require, "ffi")
+    if not ok then error("fail to load ffi") end
+
+    ffi.cdef[[
+        unsigned char* SHA1(const unsigned char *, size_t, unsigned char *);
+        size_t strlen(const char *);
+    ]]
+    -- try to load libcrypto
+    ok, C = pcall(ffi.load, "crypto")
+    if not ok then error(C) end
+    --
+    local buffer = ffi.new("char[20]")
+    -- create cosocket simulacrum with luasocket
+    local adapter = {}
+
+    function adapter:getreusedtimes() return 0 end
+    
+    function adapter:receive(len) return self._sock:receive(len) end
+    
+    function adapter:send(payload) return self._sock:send(payload) end
+
+    function adapter:setkeepalive(...) return true end
+
+    function adapter:close() return self._sock:close() end
+    
+    function adapter:settimeout(milisecs)
+        if self._sock then
+            return self._sock:settimeout(milisecs)
+        else
+            self._timeout = milisecs
+        end
+    end
+
+    function adapter:connect(address, port, options)
+        if not port or port and 'number' ~= type(port) then
+            self._sock = self._socket.unix()
+            options = options or port
+            port    = nil
+            address = sub(address, 6, -1)
+        else
+            self._sock = self._socket.tcp()
+        end
+        self._opts = options
+        if self._timeout then self._sock:settimeout(self._timeout) end
+        return self._sock:connect(address, port)
+    end
+
+    tcp = function()
+        return setmetatable({_socket = socket}, {__index=adapter})
+    end
+    null = cjson.null
+    sha1 = function(str)
+        local source = ffi.new("char[?]", #str+1, str)
+        C.SHA1(source, C.strlen(source), buffer)
+        return ffi.string(buffer, 20)
+    end
+else
+    tcp  = ngx.socket.tcp
+    null = ngx.null
+    sha1 = ngx.sha1_bin
+end
 
 local _M = { _VERSION = '0.13' }
 
