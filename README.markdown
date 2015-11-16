@@ -52,7 +52,7 @@ http://wiki.nginx.org/HttpLuaModule
 This Lua library takes advantage of ngx_lua's cosocket API, which ensures
 100% nonblocking behavior.
 
-Note that at least [ngx_lua 0.5.7](https://github.com/chaoslawful/lua-nginx-module/tags) or [ngx_openresty 1.2.1.7](http://openresty.org/#Download) is required.
+Note that at least [ngx_lua 0.9.11](https://github.com/chaoslawful/lua-nginx-module/tags) or [ngx_openresty 1.7.4.1](http://openresty.org/#Download) is required.
 
 Also, the [bit library](http://bitop.luajit.org/) is also required. If you're using LuaJIT 2.0 with ngx_lua, then the `bit` library is already available by default.
 
@@ -205,6 +205,18 @@ The `options` argument is a Lua table holding the following keys:
 * `max_packet_size`
 
     the upper limit for the reply packets sent from the MySQL server (default to 1MB).
+* `ssl`
+
+    If set to `true`, then uses SSL to connect to MySQL (default to `false`). If the MySQL
+    server does not have SSL support
+    (or just disabled), the error string "ssl disabled on server" will be returned.
+* `ssl_verify`
+
+    If set to `true`, then verifies the validity of the server SSL certificate (default to `false`).
+    Note that you need to configure the [lua_ssl_trusted_certificate](https://github.com/openresty/lua-nginx-module#lua_ssl_trusted_certificate)
+    to specify the CA (or server) certificate used by your MySQL server. You may also
+    need to configure [lua_ssl_verify_depth](https://github.com/openresty/lua-nginx-module#lua_ssl_verify_depth)
+    accordingly.
 * `pool`
 
     the name for the MySQL connection pool. if omitted, an ambiguous pool name will be generated automatically with the string template `user:database:host:port` or `user:database:path`. (this option was first introduced in `v0.08`.)
@@ -393,7 +405,7 @@ Below is a trivial example for this:
     while err == "again" do
         res, err, errno, sqlstate = db:read_result()
         if not res then
-            ngx.log(ngx.ERR, "bad result #2: ", err, ": ", errno, ": ", sqlstate, ".")
+            ngx.log(ngx.ERR, "bad result #", i, ": ", err, ": ", errno, ": ", sqlstate, ".")
             return ngx.exit(500)
         end
 
