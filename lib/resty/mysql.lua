@@ -26,27 +26,28 @@ if not ok then
     new_tab = function (narr, nrec) return {} end
 end
 
+local _M = { _VERSION = '0.13' }
+
 if not ngx then
-    local cjson, socket, ffi, C
+    local socket, cjson, ffi, C
     -- try to load luasocket
-    ok, socket = pcall(require, "socket")
-    if not ok then error("fail to load luasocket") end
-    -- try to load unix socket wrapper
-    ok, socket.unix = pcall(require, "socket.unix")
-    if not ok then error("fail to load unix socket from luasocket") end
+    ok, socket = pcall(require, 'socket')
+    assert(ok, 'failed to load luasocket')
     -- try to load cjson
-    ok, cjson = pcall(require, "cjson")
-    if not ok then error("fail to load cjson") end
+    ok, cjson = pcall(require, 'cjson')
+    assert(ok, 'failed to load lua-cjson')
+    -- try to load unix socket wrapper
+    socket.unix = require('socket.unix')
     -- try to load ffi
-    ok, ffi = pcall(require, "ffi")
-    if not ok then error("fail to load ffi") end
+    ok, ffi = pcall(require, 'ffi')
+    assert(ok, 'failed to load ffi')
 
     ffi.cdef[[
         unsigned char* SHA1(const unsigned char *, size_t, unsigned char *);
         size_t strlen(const char *);
     ]]
     -- try to load libcrypto
-    ok, C = pcall(ffi.load, "crypto")
+    ok, C = pcall(ffi.load, 'crypto')
     if not ok then error(C) end
     --
     local buffer = ffi.new("char[20]")
@@ -94,14 +95,14 @@ if not ngx then
         C.SHA1(source, C.strlen(source), buffer)
         return ffi.string(buffer, 20)
     end
+    cjson = nil
 else
     tcp  = ngx.socket.tcp
     null = ngx.null
     sha1 = ngx.sha1_bin
 end
 
-local _M = { _VERSION = '0.13' }
-
+_M.null = null
 
 -- constants
 
